@@ -30,15 +30,12 @@ if (ALLOWED_ORIGIN) {
   app.use(cors({ origin: ALLOWED_ORIGIN }));
 }
 
-app.use(
-  "/api/",
-  rateLimit({
-    windowMs: RATE_LIMIT_WINDOW_MS,
-    max: RATE_LIMIT_MAX,
-    standardHeaders: true,
-    legacyHeaders: false
-  })
-);
+const sendLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 let mqttConnected = false;
 let lastStatus = "";
@@ -200,7 +197,7 @@ app.get("/api/status", auth, (_req, res) => {
   });
 });
 
-app.post("/api/send", auth, (req, res) => {
+app.post("/api/send", sendLimiter, auth, (req, res) => {
   if (!mqttConnected) {
     return res.status(503).json({ ok: false, error: "mqtt_disconnected" });
   }

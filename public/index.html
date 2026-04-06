@@ -185,11 +185,9 @@
 
     async function refreshStatus() {
       try {
-        const h = await api("/api/health");
-        let s = {};
-        try { s = await api("/api/status"); } catch {}
+        const s = await api("/api/status");
         latestStatus = s;
-        connText.textContent = `MQTT: ${h.mqttConnected ? "Connected" : "Disconnected"} | ${h.cmdTopic}`;
+        connText.textContent = `MQTT: ${s.mqttConnected ? "Connected" : "Disconnected"} | ${s.cmdTopic}`;
         statusText.textContent = JSON.stringify(s, null, 2);
         renderNeckButtons(s);
       } catch (e) {
