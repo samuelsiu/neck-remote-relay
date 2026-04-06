@@ -80,8 +80,8 @@
         <button class="actBtn a2" onclick="sendState(2)">Lock</button>
         <button class="actBtn a3" onclick="sendState(3)">Trap</button>
         <button class="actBtn a4" onclick="sendState(4)">SUS</button>
-        <button class="actBtn a5" onclick="sendState(5)">KSUS</button>
-        <button class="actBtn a6" onclick="sendState(6)">BOOM</button>
+        <button class="actBtn a5" id="btnKsus" onclick="sendDangerState(5, 'KSUS', 'btnKsus')">KSUS</button>
+        <button class="actBtn a6" id="btnBoom" onclick="sendDangerState(6, 'BOOM', 'btnBoom')">BOOM</button>
       </div>
     </section>
 
@@ -114,9 +114,14 @@
     const connText = document.getElementById("connText");
     const onlineSummary = document.getElementById("onlineSummary");
     const targetText = document.getElementById("targetText");
+    const btnKsus = document.getElementById("btnKsus");
+    const btnBoom = document.getElementById("btnBoom");
 
     let selectedTarget = "all";
     let latestStatus = null;
+    let pendingDangerState = -1;
+    let pendingDangerTimer = null;
+    const DANGER_CONFIRM_MS = 3000;
 
     function showTab(tab) {
       const ctrl = tab === "ctrl";
@@ -197,6 +202,7 @@
 
     async function sendState(st) {
       try {
+        clearDangerConfirm();
         const body = { target: selectedTarget, state: st };
         const r = await api("/api/send", "POST", body);
         connText.textContent = `已發送: ${r.payload}`;
@@ -204,6 +210,35 @@
       } catch (e) {
         alert("發送失敗: " + e.message);
       }
+    }
+
+    function clearDangerConfirm() {
+      pendingDangerState = -1;
+      if (pendingDangerTimer) {
+        clearTimeout(pendingDangerTimer);
+        pendingDangerTimer = null;
+      }
+      btnKsus.textContent = "KSUS";
+      btnBoom.textContent = "BOOM";
+    }
+
+    async function sendDangerState(st, label, btnId) {
+      const btn = document.getElementById(btnId);
+      if (pendingDangerState === st) {
+        clearDangerConfirm();
+        await sendState(st);
+        return;
+      }
+      clearDangerConfirm();
+      pendingDangerState = st;
+      if (btn) {
+        btn.textContent = `${label} 再按確認`;
+      }
+      connText.textContent = `請在 ${DANGER_CONFIRM_MS / 1000} 秒內再按一次 ${label} 確認`;
+      pendingDangerTimer = setTimeout(() => {
+        clearDangerConfirm();
+        connText.textContent = `${label} 已取消（逾時）`;
+      }, DANGER_CONFIRM_MS);
     }
 
     async function sendCustom() {
