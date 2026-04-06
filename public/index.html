@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neck Remote Cloud Console</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e2e8f0; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 16px; }
+    .card { background: #111a2b; border: 1px solid #2b3955; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    input, select, button, textarea { border-radius: 8px; border: 1px solid #40537c; background: #0f1a2f; color: #e2e8f0; padding: 10px; }
+    button { cursor: pointer; font-weight: 700; background: #22c55e; color: #062b14; border: 0; }
+    button.warn { background: #eab308; color: #3d2e00; }
+    button.danger { background: #ef4444; color: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 8px; }
+    .muted { color: #94a3b8; font-size: 13px; }
+    .mono { font-family: Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Neck Remote Cloud Console</h2>
+
+    <div class="card">
+      <div class="row">
+        <input id="apiBase" style="flex:2;min-width:240px" placeholder="API Base (e.g. https://your-relay.example.com)" />
+        <input id="token" style="flex:2;min-width:220px" placeholder="Relay Token" />
+        <button onclick="saveConfig()">儲存設定</button>
+      </div>
+      <div class="row">
+        <button class="warn" onclick="refreshStatus()">刷新狀態</button>
+        <span id="conn" class="muted">未連線</span>
+      </div>
+      <div id="status" class="mono"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label>目標</label>
+        <select id="target"></select>
+      </div>
+      <div class="grid">
+        <button onclick="sendState(1)">Unlock</button>
+        <button onclick="sendState(2)">Lock</button>
+        <button onclick="sendState(3)">Trap</button>
+        <button onclick="sendState(4)">SUS</button>
+        <button onclick="sendState(5)">KSUS</button>
+        <button class="danger" onclick="sendState(6)">BOOM</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <textarea id="customPayload" rows="2" style="width:100%" placeholder="Custom payload, e.g. A,1 or 3,6"></textarea>
+      </div>
+      <div class="row">
+        <button onclick="sendCustom()">發送自定義</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <b>頸圈狀態卡片</b>
+        <span class="muted">online 條件: 現在時間 - ts &lt; 30 秒</span>
+      </div>
+      <div id="neckCards" class="grid"></div>
+    </div>
+  </div>
+
+  <script>
+    const target = document.getElementById("target");
+    const apiBase = document.getElementById("apiBase");
+    const token = document.getElementById("token");
+    const conn = document.getElementById("conn");
+    const statusText = document.getElementById("status");
+    const customPayload = document.getElementById("customPayload");
+    const neckCards = document.getElementById("neckCards");
+
+    function stateName(st) {
+      const names = ["Reset", "Unlock", "Lock", "Trap", "SUS", "KSUS", "BOOM"];
+      return Number.isInteger(st) && st >= 0 && st <= 6 ? names[st] : "Unknown";
+    }
+
+    function fmtTs(ts) {
+      if (!ts) return "-";
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return String(ts);
+      return d.toLocaleString();
+    }
+
+    function renderNeckCards(status) {
+      const arr = Array.isArray(status?.neckStates) ? status.neckStates : [];
+      neckCards.innerHTML = "";
+      for (let i = 0; i < 20; i++) {
+        const n = arr.find((x) => x.id === i) || { id: i, state: -1, ts: 0, online: false };
+        const d = document.createElement("div");
+        d.className = "card";
+        d.innerHTML = `
+          <div><b>N${n.id}</b> ${n.online ? "🟢 在線" : "⚪ 離線"}</div>
+          <div class="muted">state: ${stateName(n.state)} (${n.state})</div>
+          <div class="muted">ts: ${fmtTs(n.ts)}</div>
+        `;
+        neckCards.appendChild(d);
+      }
+    }
+
+    target.innerHTML = '<option value="all">全體廣播</option>';
+    for (let i = 0; i < 20; i++) {
+      const op = document.createElement("option");
+      op.value = String(i);
+      op.textContent = `頸圈 ${i}`;
+      target.appendChild(op);
+    }
+
+    function loadConfig() {
+      apiBase.value = localStorage.getItem("relay_api_base") || window.location.origin;
+      token.value = localStorage.getItem("relay_token") || "";
+    }
+
+    function saveConfig() {
+      localStorage.setItem("relay_api_base", apiBase.value.trim());
+      localStorage.setItem("relay_token", token.value.trim());
+      alert("設定已儲存");
+    }
+
+    async function api(path, method = "GET", body = null) {
+      const base = (apiBase.value || "").replace(/\/+$/, "");
+      const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token.value.trim()}` };
+      const res = await fetch(`${base}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      return json;
+    }
+
+    async function refreshStatus() {
+      try {
+        const h = await api("/api/health");
+        let s = {};
+        try { s = await api("/api/status"); } catch {}
+        conn.textContent = `MQTT: ${h.mqttConnected ? "Connected" : "Disconnected"} | cmdTopic=${h.cmdTopic}`;
+        statusText.textContent = JSON.stringify(s, null, 2);
+        renderNeckCards(s);
+      } catch (e) {
+        conn.textContent = `錯誤: ${e.message}`;
+      }
+    }
+
+    async function sendState(st) {
+      const t = target.value === "all" ? "all" : Number(target.value);
+      try {
+        const r = await api("/api/send", "POST", { target: t, state: st });
+        conn.textContent = `已發送: ${r.payload}`;
+        setTimeout(refreshStatus, 200);
+      } catch (e) {
+        alert("發送失敗: " + e.message);
+      }
+    }
+
+    async function sendCustom() {
+      const p = customPayload.value.trim();
+      if (!p) return;
+      try {
+        const r = await api("/api/send", "POST", { payload: p });
+        conn.textContent = `已發送: ${r.payload}`;
+        setTimeout(refreshStatus, 200);
+      } catch (e) {
+        alert("發送失敗: " + e.message);
+      }
+    }
+
+    loadConfig();
+    refreshStatus();
+    setInterval(refreshStatus, 5000);
+  </script>
+</body>
+</html>
