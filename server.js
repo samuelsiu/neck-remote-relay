@@ -63,6 +63,14 @@ function updateAllNeckStates(state, tsMs = Date.now(), touchTs = true) {
   }
 }
 
+function normalizeStatusTs(inputTs, fallbackTs) {
+  const t = Number(inputTs);
+  if (!Number.isFinite(t)) return fallbackTs;
+  // Device often sends millis-since-boot, not epoch ms.
+  if (t < 1_000_000_000_000) return fallbackTs;
+  return t;
+}
+
 function parseAndApplyStatus(payloadText, tsMs) {
   const txt = (payloadText || "").trim();
   if (!txt) return;
@@ -71,12 +79,12 @@ function parseAndApplyStatus(payloadText, tsMs) {
     try {
       const j = JSON.parse(txt);
       if (Number.isInteger(j.id) && Number.isInteger(j.state)) {
-        const t = Number.isInteger(j.ts) ? j.ts : tsMs;
+        const t = normalizeStatusTs(j.ts, tsMs);
         updateNeckState(j.id, j.state, t);
         return;
       }
       if (Number.isInteger(j.target) && Number.isInteger(j.state)) {
-        const t = Number.isInteger(j.ts) ? j.ts : tsMs;
+        const t = normalizeStatusTs(j.ts, tsMs);
         updateNeckState(j.target, j.state, t);
         return;
       }
@@ -96,7 +104,7 @@ function parseAndApplyStatus(payloadText, tsMs) {
   if (parts.length >= 3 && (parts[0] === "ACK" || parts[0] === "STATE")) {
     const id = Number(parts[1]);
     const state = Number(parts[2]);
-    const t = parts.length >= 4 && Number.isFinite(Number(parts[3])) ? Number(parts[3]) : tsMs;
+    const t = normalizeStatusTs(parts[3], tsMs);
     updateNeckState(id, state, t);
   }
 }
