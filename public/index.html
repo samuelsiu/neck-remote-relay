@@ -5,133 +5,141 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Neck Remote Cloud Console</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e2e8f0; }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 16px; }
-    .card { background: #111a2b; border: 1px solid #2b3955; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-    input, select, button, textarea { border-radius: 8px; border: 1px solid #40537c; background: #0f1a2f; color: #e2e8f0; padding: 10px; }
-    button { cursor: pointer; font-weight: 700; background: #22c55e; color: #062b14; border: 0; }
-    button.warn { background: #eab308; color: #3d2e00; }
-    button.danger { background: #ef4444; color: #fff; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 8px; }
-    .muted { color: #94a3b8; font-size: 13px; }
-    .mono { font-family: Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
-    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
-    .ok { background:#14532d; color:#86efac; }
-    .bad { background:#7f1d1d; color:#fecaca; }
+    :root { --bg:#0b1220; --panel:#111a2b; --line:#2b3955; --text:#e2e8f0; --muted:#94a3b8; --ok:#22c55e; --bad:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:Arial,sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
+    .app { max-width:980px; margin:0 auto; padding:10px; height:100vh; display:flex; flex-direction:column; gap:8px; }
+    .title { font-size:26px; font-weight:700; margin:2px 0 0; }
+    .tabs { display:flex; gap:6px; }
+    .tab { padding:8px 12px; border:1px solid var(--line); border-radius:9px; background:#0f1a2f; color:var(--text); cursor:pointer; }
+    .tab.active { background:#1e293b; border-color:#4b5f86; }
+    .panel { display:none; border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:10px; }
+    .panel.active { display:block; }
+
+    .controlWrap { flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; }
+    .topInfo { display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:13px; color:var(--muted); }
+    .pill { padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .pill.ok { background:#14532d; color:#86efac; }
+    .pill.bad { background:#7f1d1d; color:#fecaca; }
+
+    .neckGrid { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:5px; }
+    .neckBtn {
+      border:1px solid #3b4f78; background:#0f1a2f; color:var(--text);
+      border-radius:8px; padding:5px 3px; cursor:pointer; text-align:center; min-height:44px;
+    }
+    .neckBtn.active { border-color:#22c55e; box-shadow:0 0 0 1px #22c55e inset; }
+    .neckBtn .id { font-size:12px; font-weight:700; line-height:1.1; }
+    .neckBtn .st { font-size:10px; color:var(--muted); line-height:1.1; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .neckBtn .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; background:#64748b; }
+    .neckBtn.online .dot { background:var(--ok); }
+
+    .bottomActions { margin-top:auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+    .actBtn { border:0; border-radius:10px; padding:12px 8px; font-size:16px; font-weight:700; cursor:pointer; }
+    .a1 { background:#22c55e; color:#062b14; } .a2 { background:#7dd3fc; color:#082f49; }
+    .a3 { background:#c084fc; color:#2e1065; } .a4 { background:#f59e0b; color:#451a03; }
+    .a5 { background:#fb7185; color:#4c0519; } .a6 { background:#ef4444; color:#fff; }
+
+    input, textarea, button { font-family:inherit; }
+    input, textarea {
+      width:100%; border-radius:9px; border:1px solid #40537c; background:#0f1a2f; color:var(--text); padding:10px;
+    }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+    .btn { border:0; border-radius:9px; padding:10px 12px; cursor:pointer; font-weight:700; background:#22c55e; color:#062b14; }
+    .btn.warn { background:#eab308; color:#3d2e00; }
+    .mono { font-family:Consolas,monospace; font-size:12px; white-space:pre-wrap; max-height:24vh; overflow:auto; color:#cbd5e1; }
+    .hint { color:var(--muted); font-size:12px; }
+
+    @media (max-width: 760px) {
+      .app { padding:8px; gap:6px; }
+      .title { font-size:22px; }
+      .neckGrid { grid-template-columns:repeat(6,minmax(0,1fr)); }
+      .actBtn { font-size:15px; padding:10px 6px; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h2>Neck Remote Cloud Console</h2>
+  <div class="app">
+    <div class="title">Neck Remote Cloud Console</div>
+    <div class="tabs">
+      <button class="tab active" id="tabCtrl" onclick="showTab('ctrl')">控制</button>
+      <button class="tab" id="tabCfg" onclick="showTab('cfg')">設定 / 資訊</button>
+    </div>
 
-    <div class="card">
+    <section class="panel active controlWrap" id="panelCtrl">
+      <div class="topInfo">
+        <span id="connText">MQTT: -</span>
+        <span id="onlineSummary" class="pill bad">在線 0/20</span>
+        <span id="targetText">目標：全體</span>
+      </div>
+
+      <div class="neckGrid" id="neckGrid"></div>
+      <div class="hint">點上方頸圈小按鍵即可切換目標；左上「ALL」為全體廣播。</div>
+
+      <div class="bottomActions">
+        <button class="actBtn a1" onclick="sendState(1)">Unlock</button>
+        <button class="actBtn a2" onclick="sendState(2)">Lock</button>
+        <button class="actBtn a3" onclick="sendState(3)">Trap</button>
+        <button class="actBtn a4" onclick="sendState(4)">SUS</button>
+        <button class="actBtn a5" onclick="sendState(5)">KSUS</button>
+        <button class="actBtn a6" onclick="sendState(6)">BOOM</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panelCfg">
       <div class="row">
         <input id="apiBase" style="flex:2;min-width:240px" placeholder="API Base (e.g. https://your-relay.example.com)" />
         <input id="token" style="flex:2;min-width:220px" placeholder="Relay Token" />
-        <button onclick="saveConfig()">儲存設定</button>
+        <button class="btn" onclick="saveConfig()">儲存設定</button>
+        <button class="btn warn" onclick="refreshStatus()">刷新狀態</button>
       </div>
       <div class="row">
-        <button class="warn" onclick="refreshStatus()">刷新狀態</button>
-        <span id="conn" class="muted">未連線</span>
-        <span id="onlineSummary" class="muted"></span>
+        <textarea id="customPayload" rows="2" placeholder="自定義 payload，例如 A,1 或 3,6"></textarea>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="sendCustom()">發送自定義</button>
       </div>
       <details>
         <summary>除錯資訊（JSON）</summary>
         <div id="status" class="mono"></div>
       </details>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <label>目標</label>
-        <select id="target"></select>
-      </div>
-      <div class="grid">
-        <button onclick="sendState(1)">Unlock</button>
-        <button onclick="sendState(2)">Lock</button>
-        <button onclick="sendState(3)">Trap</button>
-        <button onclick="sendState(4)">SUS</button>
-        <button onclick="sendState(5)">KSUS</button>
-        <button class="danger" onclick="sendState(6)">BOOM</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <textarea id="customPayload" rows="2" style="width:100%" placeholder="Custom payload, e.g. A,1 or 3,6"></textarea>
-      </div>
-      <div class="row">
-        <button onclick="sendCustom()">發送自定義</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <b>頸圈狀態卡片</b>
-        <span class="muted">online 條件: 現在時間 - ts &lt; 30 秒</span>
-      </div>
-      <div id="neckCards" class="grid"></div>
-    </div>
+    </section>
   </div>
 
   <script>
-    const target = document.getElementById("target");
     const apiBase = document.getElementById("apiBase");
     const token = document.getElementById("token");
-    const conn = document.getElementById("conn");
     const statusText = document.getElementById("status");
     const customPayload = document.getElementById("customPayload");
-    const neckCards = document.getElementById("neckCards");
+    const neckGrid = document.getElementById("neckGrid");
+    const connText = document.getElementById("connText");
+    const onlineSummary = document.getElementById("onlineSummary");
+    const targetText = document.getElementById("targetText");
+
+    let selectedTarget = "all";
+    let latestStatus = null;
+
+    function showTab(tab) {
+      const ctrl = tab === "ctrl";
+      document.getElementById("panelCtrl").classList.toggle("active", ctrl);
+      document.getElementById("panelCfg").classList.toggle("active", !ctrl);
+      document.getElementById("tabCtrl").classList.toggle("active", ctrl);
+      document.getElementById("tabCfg").classList.toggle("active", !ctrl);
+    }
 
     function stateName(st) {
       const names = ["Reset", "Unlock", "Lock", "Trap", "SUS", "KSUS", "BOOM"];
       return Number.isInteger(st) && st >= 0 && st <= 6 ? names[st] : "Unknown";
     }
 
-    function fmtTs(ts) {
-      if (!ts) return "-";
-      const d = new Date(ts);
-      if (Number.isNaN(d.getTime())) return String(ts);
-      return d.toLocaleString();
-    }
-
-    function renderNeckCards(status) {
-      const arr = Array.isArray(status?.neckStates) ? status.neckStates : [];
-      neckCards.innerHTML = "";
-      let onlineCount = 0;
-      for (let i = 0; i < 20; i++) {
-        const n = arr.find((x) => x.id === i) || { id: i, state: -1, ts: 0, online: false };
-        if (n.online) onlineCount++;
-        const d = document.createElement("div");
-        d.className = "card";
-        d.innerHTML = `
-          <div><b>N${n.id}</b> <span class="pill ${n.online ? "ok" : "bad"}">${n.online ? "在線" : "離線"}</span></div>
-          <div class="muted">state: ${stateName(n.state)} (${n.state})</div>
-          <div class="muted">ts: ${fmtTs(n.ts)}</div>
-        `;
-        neckCards.appendChild(d);
-      }
-      document.getElementById("onlineSummary").textContent = `在線 ${onlineCount}/20`;
-    }
-
-    target.innerHTML = '<option value="all">全體廣播</option>';
-    for (let i = 0; i < 20; i++) {
-      const op = document.createElement("option");
-      op.value = String(i);
-      op.textContent = `頸圈 ${i}`;
-      target.appendChild(op);
+    function saveConfig() {
+      localStorage.setItem("relay_api_base", apiBase.value.trim());
+      localStorage.setItem("relay_token", token.value.trim());
+      alert("設定已儲存");
     }
 
     function loadConfig() {
       apiBase.value = localStorage.getItem("relay_api_base") || window.location.origin;
       token.value = localStorage.getItem("relay_token") || "";
-    }
-
-    function saveConfig() {
-      localStorage.setItem("relay_api_base", apiBase.value.trim());
-      localStorage.setItem("relay_token", token.value.trim());
-      alert("設定已儲存");
     }
 
     async function api(path, method = "GET", body = null) {
@@ -143,26 +151,58 @@
       return json;
     }
 
+    function setTarget(t) {
+      selectedTarget = t;
+      targetText.textContent = t === "all" ? "目標：全體" : `目標：頸圈 ${t}`;
+      renderNeckButtons(latestStatus);
+    }
+
+    function renderNeckButtons(status) {
+      const arr = Array.isArray(status?.neckStates) ? status.neckStates : [];
+      let onlineCount = 0;
+      neckGrid.innerHTML = "";
+      const allBtn = document.createElement("button");
+      allBtn.className = `neckBtn ${selectedTarget === "all" ? "active" : ""}`;
+      allBtn.innerHTML = `<div class="id">ALL</div><div class="st">全體廣播</div>`;
+      allBtn.onclick = () => setTarget("all");
+      neckGrid.appendChild(allBtn);
+
+      for (let i = 0; i < 20; i++) {
+        const n = arr.find((x) => x.id === i) || { id: i, state: -1, ts: 0, online: false };
+        if (n.online) onlineCount++;
+        const b = document.createElement("button");
+        b.className = `neckBtn ${n.online ? "online" : ""} ${selectedTarget === i ? "active" : ""}`;
+        b.innerHTML = `
+          <div class="id">N${i}</div>
+          <div class="st"><span class="dot"></span>${stateName(n.state)}</div>
+        `;
+        b.onclick = () => setTarget(i);
+        neckGrid.appendChild(b);
+      }
+      onlineSummary.textContent = `在線 ${onlineCount}/20`;
+      onlineSummary.className = `pill ${onlineCount > 0 ? "ok" : "bad"}`;
+    }
+
     async function refreshStatus() {
       try {
         const h = await api("/api/health");
         let s = {};
         try { s = await api("/api/status"); } catch {}
-        conn.textContent = `MQTT: ${h.mqttConnected ? "Connected" : "Disconnected"} | cmdTopic=${h.cmdTopic}`;
+        latestStatus = s;
+        connText.textContent = `MQTT: ${h.mqttConnected ? "Connected" : "Disconnected"} | ${h.cmdTopic}`;
         statusText.textContent = JSON.stringify(s, null, 2);
-        renderNeckCards(s);
+        renderNeckButtons(s);
       } catch (e) {
-        conn.textContent = `錯誤: ${e.message}`;
-        document.getElementById("onlineSummary").textContent = "";
+        connText.textContent = `錯誤: ${e.message}`;
       }
     }
 
     async function sendState(st) {
-      const t = target.value === "all" ? "all" : Number(target.value);
       try {
-        const r = await api("/api/send", "POST", { target: t, state: st });
-        conn.textContent = `已發送: ${r.payload}`;
-        setTimeout(refreshStatus, 200);
+        const body = { target: selectedTarget, state: st };
+        const r = await api("/api/send", "POST", body);
+        connText.textContent = `已發送: ${r.payload}`;
+        setTimeout(refreshStatus, 180);
       } catch (e) {
         alert("發送失敗: " + e.message);
       }
@@ -173,14 +213,15 @@
       if (!p) return;
       try {
         const r = await api("/api/send", "POST", { payload: p });
-        conn.textContent = `已發送: ${r.payload}`;
-        setTimeout(refreshStatus, 200);
+        connText.textContent = `已發送: ${r.payload}`;
+        setTimeout(refreshStatus, 180);
       } catch (e) {
         alert("發送失敗: " + e.message);
       }
     }
 
     loadConfig();
+    setTarget("all");
     refreshStatus();
     setInterval(refreshStatus, 5000);
   </script>
