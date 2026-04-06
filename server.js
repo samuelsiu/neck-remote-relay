@@ -48,16 +48,18 @@ const neckStates = Array.from({ length: NECK_COUNT }, (_, id) => ({
   ts: 0
 }));
 
-function updateNeckState(id, state, tsMs = Date.now()) {
+function updateNeckState(id, state, tsMs = Date.now(), touchTs = true) {
   if (!Number.isInteger(id) || id < 0 || id > MAX_NECK_ID) return;
   if (!Number.isInteger(state) || state < -1 || state > 6) return;
   neckStates[id].state = state;
-  neckStates[id].ts = tsMs;
+  if (touchTs) {
+    neckStates[id].ts = tsMs;
+  }
 }
 
-function updateAllNeckStates(state, tsMs = Date.now()) {
+function updateAllNeckStates(state, tsMs = Date.now(), touchTs = true) {
   for (let i = 0; i < NECK_COUNT; i++) {
-    updateNeckState(i, state, tsMs);
+    updateNeckState(i, state, tsMs, touchTs);
   }
 }
 
@@ -79,8 +81,8 @@ function parseAndApplyStatus(payloadText, tsMs) {
         return;
       }
       if (j.target === "all" && Number.isInteger(j.state)) {
-        const t = Number.isInteger(j.ts) ? j.ts : tsMs;
-        updateAllNeckStates(j.state, t);
+        // "all" 多半是發信器發送紀錄，不代表每顆頸圈都回報在線
+        updateAllNeckStates(j.state, tsMs, false);
         return;
       }
     } catch {
@@ -216,10 +218,12 @@ app.post("/api/send", sendLimiter, auth, (req, res) => {
     const now = Date.now();
     if (/^A,\d$/.test(payload)) {
       const st = Number(payload.split(",")[1]);
-      updateAllNeckStates(st, now);
+      // 下發命令僅更新預期狀態，不更新在線時間(ts)
+      updateAllNeckStates(st, now, false);
     } else if (/^\d{1,2},\d$/.test(payload)) {
       const [idText, stText] = payload.split(",");
-      updateNeckState(Number(idText), Number(stText), now);
+      // 下發命令僅更新預期狀態，不更新在線時間(ts)
+      updateNeckState(Number(idText), Number(stText), now, false);
     }
     return res.json({ ok: true, payload });
   });
