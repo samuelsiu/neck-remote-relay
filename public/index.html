@@ -68,7 +68,7 @@
     <section class="panel active controlWrap" id="panelCtrl">
       <div class="topInfo">
         <span id="connText">MQTT: -</span>
-        <span id="onlineSummary" class="pill bad">在線 0/20</span>
+        <span id="onlineSummary" class="pill bad">在線 0/31</span>
         <span id="targetText">目標：全體</span>
       </div>
 
@@ -119,6 +119,8 @@
 
     let selectedTarget = "all";
     let latestStatus = null;
+    const MAX_NECK_ID = 30;
+    const NECK_COUNT = MAX_NECK_ID + 1;
     let pendingDangerState = -1;
     let pendingDangerTimer = null;
     const DANGER_CONFIRM_MS = 3000;
@@ -172,7 +174,7 @@
       allBtn.onclick = () => setTarget("all");
       neckGrid.appendChild(allBtn);
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < NECK_COUNT; i++) {
         const n = arr.find((x) => x.id === i) || { id: i, state: -1, ts: 0, online: false };
         if (n.online) onlineCount++;
         const b = document.createElement("button");
@@ -184,7 +186,7 @@
         b.onclick = () => setTarget(i);
         neckGrid.appendChild(b);
       }
-      onlineSummary.textContent = `在線 ${onlineCount}/20`;
+      onlineSummary.textContent = `在線 ${onlineCount}/${NECK_COUNT}`;
       onlineSummary.className = `pill ${onlineCount > 0 ? "ok" : "bad"}`;
     }
 

@@ -17,6 +17,8 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "";
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60 * 1000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
 const ONLINE_TIMEOUT_MS = Number(process.env.ONLINE_TIMEOUT_MS || 30000);
+const MAX_NECK_ID = Number(process.env.MAX_NECK_ID || 30);
+const NECK_COUNT = MAX_NECK_ID + 1;
 
 if (!RELAY_TOKEN) {
   console.warn("[WARN] RELAY_TOKEN is empty. Set RELAY_TOKEN in .env before production.");
@@ -40,21 +42,21 @@ const sendLimiter = rateLimit({
 let mqttConnected = false;
 let lastStatus = "";
 let lastStatusTs = 0;
-const neckStates = Array.from({ length: 20 }, (_, id) => ({
+const neckStates = Array.from({ length: NECK_COUNT }, (_, id) => ({
   id,
   state: -1,
   ts: 0
 }));
 
 function updateNeckState(id, state, tsMs = Date.now()) {
-  if (!Number.isInteger(id) || id < 0 || id > 19) return;
+  if (!Number.isInteger(id) || id < 0 || id > MAX_NECK_ID) return;
   if (!Number.isInteger(state) || state < -1 || state > 6) return;
   neckStates[id].state = state;
   neckStates[id].ts = tsMs;
 }
 
 function updateAllNeckStates(state, tsMs = Date.now()) {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < NECK_COUNT; i++) {
     updateNeckState(i, state, tsMs);
   }
 }
@@ -162,7 +164,7 @@ function buildPayload(body) {
   }
 
   const neck = Number(body.target);
-  if (!Number.isInteger(neck) || neck < 0 || neck > 19) {
+  if (!Number.isInteger(neck) || neck < 0 || neck > MAX_NECK_ID) {
     return null;
   }
   return `${neck},${state}`;
