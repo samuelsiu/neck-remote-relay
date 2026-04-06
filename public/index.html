@@ -16,6 +16,9 @@
     .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 8px; }
     .muted { color: #94a3b8; font-size: 13px; }
     .mono { font-family: Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .ok { background:#14532d; color:#86efac; }
+    .bad { background:#7f1d1d; color:#fecaca; }
   </style>
 </head>
 <body>
@@ -31,8 +34,12 @@
       <div class="row">
         <button class="warn" onclick="refreshStatus()">刷新狀態</button>
         <span id="conn" class="muted">未連線</span>
+        <span id="onlineSummary" class="muted"></span>
       </div>
-      <div id="status" class="mono"></div>
+      <details>
+        <summary>除錯資訊（JSON）</summary>
+        <div id="status" class="mono"></div>
+      </details>
     </div>
 
     <div class="card">
@@ -92,17 +99,20 @@
     function renderNeckCards(status) {
       const arr = Array.isArray(status?.neckStates) ? status.neckStates : [];
       neckCards.innerHTML = "";
+      let onlineCount = 0;
       for (let i = 0; i < 20; i++) {
         const n = arr.find((x) => x.id === i) || { id: i, state: -1, ts: 0, online: false };
+        if (n.online) onlineCount++;
         const d = document.createElement("div");
         d.className = "card";
         d.innerHTML = `
-          <div><b>N${n.id}</b> ${n.online ? "🟢 在線" : "⚪ 離線"}</div>
+          <div><b>N${n.id}</b> <span class="pill ${n.online ? "ok" : "bad"}">${n.online ? "在線" : "離線"}</span></div>
           <div class="muted">state: ${stateName(n.state)} (${n.state})</div>
           <div class="muted">ts: ${fmtTs(n.ts)}</div>
         `;
         neckCards.appendChild(d);
       }
+      document.getElementById("onlineSummary").textContent = `在線 ${onlineCount}/20`;
     }
 
     target.innerHTML = '<option value="all">全體廣播</option>';
@@ -143,6 +153,7 @@
         renderNeckCards(s);
       } catch (e) {
         conn.textContent = `錯誤: ${e.message}`;
+        document.getElementById("onlineSummary").textContent = "";
       }
     }
 
