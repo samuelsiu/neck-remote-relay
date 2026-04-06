@@ -17,6 +17,7 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "";
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60 * 1000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 30);
 const ONLINE_TIMEOUT_MS = Number(process.env.ONLINE_TIMEOUT_MS || 30000);
+const ACK_WAIT_MS = Number(process.env.ACK_WAIT_MS || 10000);
 const MAX_NECK_ID = Number(process.env.MAX_NECK_ID || 30);
 const NECK_COUNT = MAX_NECK_ID + 1;
 
@@ -45,7 +46,8 @@ let lastStatusTs = 0;
 const neckStates = Array.from({ length: NECK_COUNT }, (_, id) => ({
   id,
   state: -1,
-  ts: 0
+  ts: 0,
+  lastCmdTs: 0
 }));
 
 function updateNeckState(id, state, tsMs = Date.now(), touchTs = true) {
@@ -60,6 +62,17 @@ function updateNeckState(id, state, tsMs = Date.now(), touchTs = true) {
 function updateAllNeckStates(state, tsMs = Date.now(), touchTs = true) {
   for (let i = 0; i < NECK_COUNT; i++) {
     updateNeckState(i, state, tsMs, touchTs);
+  }
+}
+
+function markCommandSent(id, tsMs = Date.now()) {
+  if (!Number.isInteger(id) || id < 0 || id > MAX_NECK_ID) return;
+  neckStates[id].lastCmdTs = tsMs;
+}
+
+function markAllCommandsSent(tsMs = Date.now()) {
+  for (let i = 0; i < NECK_COUNT; i++) {
+    markCommandSent(i, tsMs);
   }
 }
 
@@ -200,11 +213,23 @@ app.get("/api/status", auth, (_req, res) => {
     lastStatus,
     lastStatusTs,
     onlineTimeoutMs: ONLINE_TIMEOUT_MS,
+    ackWaitMs: ACK_WAIT_MS,
     neckStates: neckStates.map((n) => ({
-      id: n.id,
-      state: n.state,
-      ts: n.ts,
-      online: n.ts > 0 && now - n.ts < ONLINE_TIMEOUT_MS
+      // Base online: recent ACK heartbeat.
+      // If a newer command was sent and no newer ACK arrives within ACK_WAIT_MS,
+      // force offline to surface missing command response quickly.
+      ...(() => {
+        const baseOnline = n.ts > 0 && now - n.ts < ONLINE_TIMEOUT_MS;
+        const waitingAckForLatestCmd = n.lastCmdTs > 0 && n.ts < n.lastCmdTs;
+        const ackWaitExpired = waitingAckForLatestCmd && (now - n.lastCmdTs >= ACK_WAIT_MS);
+        return {
+          id: n.id,
+          state: n.state,
+          ts: n.ts,
+          lastCmdTs: n.lastCmdTs,
+          online: ackWaitExpired ? false : baseOnline
+        };
+      })()
     }))
   });
 });
@@ -228,10 +253,13 @@ app.post("/api/send", sendLimiter, auth, (req, res) => {
       const st = Number(payload.split(",")[1]);
       // 下發命令僅更新預期狀態，不更新在線時間(ts)
       updateAllNeckStates(st, now, false);
+      markAllCommandsSent(now);
     } else if (/^\d{1,2},\d$/.test(payload)) {
       const [idText, stText] = payload.split(",");
       // 下發命令僅更新預期狀態，不更新在線時間(ts)
-      updateNeckState(Number(idText), Number(stText), now, false);
+      const id = Number(idText);
+      updateNeckState(id, Number(stText), now, false);
+      markCommandSent(id, now);
     }
     return res.json({ ok: true, payload });
   });
